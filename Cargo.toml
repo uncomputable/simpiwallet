@@ -1,0 +1,12 @@
+[package]
+name = "simpiwallet"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+simplicity = { git = "https://github.com/uncomputable/rust-simplicity", branch = "policy-fixes", features = ["serde"] }
+elements-miniscript = { git = "https://github.com/uncomputable/elements-miniscript", branch = "simplicity", features = ["serde"] }
+lexopt = "0.3"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+jsonrpc = "0.16.0"
