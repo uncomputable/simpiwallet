@@ -79,7 +79,10 @@ impl Connection {
 
         let addresses: Vec<_> = child_descriptors
             .iter()
-            .map(|d| d.address(&elements::AddressParams::ELEMENTS).expect("const"))
+            .map(|d| {
+                d.address(&elements::AddressParams::ELEMENTS)
+                    .expect("const")
+            })
             .map(|a| format!("addr({})", a))
             .map(serde_json::Value::String)
             .collect();
@@ -100,7 +103,11 @@ impl Connection {
         max_child_index: u32,
     ) -> Result<UtxoSet, Error> {
         let child_descriptors: Vec<_> = (0..max_child_index)
-            .map(|i| parent_descriptor.at_derivation_index(i).expect("valid child index"))
+            .map(|i| {
+                parent_descriptor
+                    .at_derivation_index(i)
+                    .expect("valid child index")
+            })
             .collect();
         let result = self.scantxoutset(&child_descriptors)?;
         let mut utxos = Vec::new();

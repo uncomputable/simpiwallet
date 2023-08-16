@@ -131,7 +131,10 @@ mod tests {
     #[test]
     fn descriptor_secret_key_at_derivation_index() {
         let parent_xpriv = DescriptorSecretKey::from_seed(&[0; 32]).expect("const");
-        let parent_xpub = parent_xpriv.0.to_public(secp256k1_zkp::SECP256K1).expect("const");
+        let parent_xpub = parent_xpriv
+            .0
+            .to_public(secp256k1_zkp::SECP256K1)
+            .expect("const");
 
         for index in 0..10 {
             let private_key = parent_xpriv

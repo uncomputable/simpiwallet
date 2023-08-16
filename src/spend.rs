@@ -203,7 +203,9 @@ impl TransactionBuilder {
         let mut witnesses = Vec::with_capacity(self.inputs.len());
 
         for (txin_index, desc_index) in self.desc_indices.iter().copied().enumerate() {
-            let child_descriptor = parent_descriptor.at_derivation_index(desc_index).expect("valid child index");
+            let child_descriptor = parent_descriptor
+                .at_derivation_index(desc_index)
+                .expect("valid child index");
             let (script_cmr, control_block) = get_cmr_control_block(&child_descriptor)?;
 
             let satisfier = DynamicSigner {
@@ -289,7 +291,10 @@ where
         for (desc_pk, desc_sk) in self.keymap {
             // TODO: Update once there is support for multiple descriptors
             for index in 0..self.max_key_index {
-                let child_public_key = desc_pk.clone().at_derivation_index(index).expect("valid child index");
+                let child_public_key = desc_pk
+                    .clone()
+                    .at_derivation_index(index)
+                    .expect("valid child index");
                 if child_public_key.to_public_key() == pk {
                     let child_secret_key = desc_sk.clone().at_derivation_index(index).ok()?;
                     let keypair = elements::schnorr::KeyPair::from_secret_key(
