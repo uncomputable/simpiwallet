@@ -8,6 +8,7 @@ use std::str::FromStr;
 use elements::bitcoin;
 use elements::secp256k1_zkp;
 use elements_miniscript as miniscript;
+use elements_miniscript::descriptor::TapTree;
 use miniscript::{
     elements, DefiniteDescriptorKey, Descriptor, DescriptorPublicKey, MiniscriptKey, Preimage32,
     Satisfier, ToPublicKey,
@@ -245,18 +246,21 @@ fn get_cmr_control_block(
     descriptor: &Descriptor<DefiniteDescriptorKey>,
 ) -> Option<(simplicity::Cmr, elements::taproot::ControlBlock)> {
     if let Descriptor::Tr(tr) = descriptor {
-        let policy = tr.get_simplicity()?;
-        let commit = policy.serialize_no_witness();
-        let cmr = commit.cmr();
+        if let TapTree::SimplicityLeaf(policy) = tr.taptree().as_ref()? {
+            let commit = policy.serialize_no_witness();
+            let cmr = commit.cmr();
 
-        let script = elements::Script::from(cmr.as_ref().to_vec());
-        let script_ver = (script, simplicity::leaf_version());
-        let control_block = tr
-            .spend_info()
-            .control_block(&script_ver)
-            .expect("Control block must exist in script map for every known leaf");
+            let script = elements::Script::from(cmr.as_ref().to_vec());
+            let script_ver = (script, simplicity::leaf_version());
+            let control_block = tr
+                .spend_info()
+                .control_block(&script_ver)
+                .expect("Control block must exist in script map for every known leaf");
 
-        Some((cmr, control_block))
+            Some((cmr, control_block))
+        } else {
+            None
+        }
     } else {
         None
     }
