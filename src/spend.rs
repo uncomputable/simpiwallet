@@ -234,8 +234,10 @@ impl TransactionBuilder {
             });
         }
 
-        for (index, witness) in witnesses.into_iter().enumerate() {
-            tx.input[index].witness = witness;
+        // In the first loop we could not mutate tx because it is borrowed by the sighash cache
+        // Add the witness to each input in a second loop
+        for (txin_index, witness) in witnesses.into_iter().enumerate() {
+            tx.input[txin_index].witness = witness;
         }
 
         Some(tx)
