@@ -1,3 +1,6 @@
+use std::fmt;
+use std::str::FromStr;
+
 use elements_miniscript as miniscript;
 use miniscript::bitcoin::hashes::{sha256, Hash};
 use miniscript::elements;
@@ -59,5 +62,26 @@ impl Network {
             Network::Testnet => TESTNET_GENESIS_HASH,
         };
         elements::BlockHash::from_byte_array(bytes)
+    }
+}
+
+impl FromStr for Network {
+    type Err = &'static str;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "regtest" => Ok(Self::Regtest),
+            "testnet" => Ok(Self::Testnet),
+            _ => Err("Unknown network"),
+        }
+    }
+}
+
+impl fmt::Display for Network {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Network::Regtest => f.write_str("regtest"),
+            Network::Testnet => f.write_str("testnet"),
+        }
     }
 }

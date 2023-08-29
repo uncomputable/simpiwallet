@@ -12,6 +12,7 @@ use miniscript::bitcoin;
 
 use crate::error::Error;
 use crate::key::DescriptorSecretKey;
+use crate::network::Network;
 use crate::spend::Payment;
 use crate::state::State;
 
@@ -22,6 +23,7 @@ pub enum Command {
     SendToAddress { send_to: Payment },
     SetFee { fee: bitcoin::Amount },
     SetRpc { rpc: rpc::Connection },
+    SetNetwork { network: Network },
 }
 
 fn main() -> Result<(), Error> {
@@ -61,6 +63,12 @@ fn main() -> Result<(), Error> {
             let mut state = State::load("state.json")?;
             println!("New RPC connection: {}", rpc);
             state.set_rpc(rpc);
+            state.save("state.json", false)?;
+        }
+        Command::SetNetwork { network } => {
+            let mut state = State::load("state.json")?;
+            println!("New network: {}", network);
+            state.set_network(network);
             state.save("state.json", false)?;
         }
     }

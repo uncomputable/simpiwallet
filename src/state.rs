@@ -99,6 +99,10 @@ impl State {
         self.network
     }
 
+    pub fn set_network(&mut self, network: Network) {
+        self.network = network;
+    }
+
     pub fn load<P: AsRef<Path>>(path: P) -> Result<Self, Error> {
         let file = File::open(path)?;
         let reader = BufReader::new(file);
