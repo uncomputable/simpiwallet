@@ -74,15 +74,13 @@ impl Connection {
     fn scantxoutset(
         &self,
         child_descriptors: &[Descriptor<DefiniteDescriptorKey>],
+        address_params: &'static elements::AddressParams,
     ) -> Result<ScanTxOutResult, Error> {
         let action = serde_json::Value::String("start".to_string());
 
         let addresses: Vec<_> = child_descriptors
             .iter()
-            .map(|d| {
-                d.address(&elements::AddressParams::ELEMENTS)
-                    .expect("const")
-            })
+            .map(|d| d.address(address_params).expect("taproot address"))
             .map(|a| format!("addr({})", a))
             .map(serde_json::Value::String)
             .collect();
@@ -101,6 +99,7 @@ impl Connection {
         &self,
         parent_descriptor: &Descriptor<DescriptorPublicKey>,
         max_child_index: u32,
+        address_params: &'static elements::AddressParams,
     ) -> Result<UtxoSet, Error> {
         let child_descriptors: Vec<_> = (0..max_child_index)
             .map(|i| {
@@ -109,7 +108,7 @@ impl Connection {
                     .expect("valid child index")
             })
             .collect();
-        let result = self.scantxoutset(&child_descriptors)?;
+        let result = self.scantxoutset(&child_descriptors, address_params)?;
         let mut utxos = Vec::new();
 
         for unspent in result.unspents {

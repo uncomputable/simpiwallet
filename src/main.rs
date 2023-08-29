@@ -1,6 +1,7 @@
 mod descriptor;
 mod error;
 mod key;
+mod network;
 mod parse;
 mod rpc;
 mod spend;

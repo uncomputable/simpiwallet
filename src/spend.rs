@@ -3,7 +3,6 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::ops::Deref;
 use std::rc::Rc;
-use std::str::FromStr;
 
 use elements::bitcoin;
 use elements::secp256k1_zkp;
@@ -16,18 +15,16 @@ use miniscript::{
 
 use crate::error::Error;
 use crate::key::DescriptorSecretKey;
+use crate::network::Network;
 use crate::state::{State, UtxoSet};
-
-pub const BITCOIN_ASSET_ID: &str =
-    "b2e15d0d7a0c94e4e2ce0fe6e8691b9e451377f6e46e8045a86f7c4b5d4f0f23";
-pub const ELEMENTS_REGTEST_GENESIS_BLOCK_HASH: &str =
-    "209577bda6bf4b5804bd46f8621580dd6d4e8bfa2d190e1c50e932492baca07d";
 
 pub fn get_balance(state: &State) -> Result<bitcoin::Amount, Error> {
     let parent_descriptor = state.descriptor();
-    let utxo_set = state
-        .rpc()
-        .scan(parent_descriptor, state.max_child_index())?;
+    let utxo_set = state.rpc().scan(
+        parent_descriptor,
+        state.max_child_index(),
+        state.network().address_params(),
+    )?;
     dbg!(&utxo_set);
     Ok(utxo_set.total_amount())
 }
@@ -39,9 +36,11 @@ pub fn send_to_address(state: &mut State, send_to: Payment) -> Result<elements::
         .at_derivation_index(change_index)
         .expect("valid child index");
 
-    let utxo_set = state
-        .rpc()
-        .scan(parent_descriptor, state.max_child_index())?;
+    let utxo_set = state.rpc().scan(
+        parent_descriptor,
+        state.max_child_index(),
+        state.network().address_params(),
+    )?;
     let (selection, available) = utxo_set
         .select_coins(send_to.amount + state.fee())
         .ok_or(Error::NotEnoughFunds)?;
@@ -49,18 +48,18 @@ pub fn send_to_address(state: &mut State, send_to: Payment) -> Result<elements::
     let change = Payment {
         amount: available - send_to.amount - state.fee(), // available >= send_to.amount + fee
         address: change_descriptor
-            .address(&elements::AddressParams::ELEMENTS)
+            .address(state.network().address_params())
             .expect("taproot address"),
     };
 
-    let mut builder = TransactionBuilder::default();
+    let mut builder = TransactionBuilder::new(state.network());
 
-    for input in selection.into_inputs(parent_descriptor) {
+    for input in selection.into_inputs(parent_descriptor, state.network().bitcoin_id()) {
         builder.add_input(input);
     }
 
-    builder.add_output(send_to.to_output());
-    builder.add_output(change.to_output());
+    builder.add_output(send_to.to_output(state.network().bitcoin_id()));
+    builder.add_output(change.to_output(state.network().bitcoin_id()));
     builder.add_fee(state.fee());
 
     let tx = builder
@@ -77,11 +76,9 @@ pub struct Payment {
 }
 
 impl Payment {
-    pub fn to_output(&self) -> elements::TxOut {
+    pub fn to_output(&self, bitcoin_id: elements::AssetId) -> elements::TxOut {
         elements::TxOut {
-            asset: elements::confidential::Asset::Explicit(
-                elements::AssetId::from_str(BITCOIN_ASSET_ID).expect("const"),
-            ),
+            asset: elements::confidential::Asset::Explicit(bitcoin_id),
             value: elements::confidential::Value::Explicit(self.amount.to_sat()),
             nonce: elements::confidential::Nonce::Null,
             script_pubkey: self.address.script_pubkey(),
@@ -115,7 +112,11 @@ impl UtxoSet {
         self.0.iter().map(|u| u.amount).sum()
     }
 
-    pub fn into_inputs(self, parent_descriptor: &Descriptor<DescriptorPublicKey>) -> Vec<Input> {
+    pub fn into_inputs(
+        self,
+        parent_descriptor: &Descriptor<DescriptorPublicKey>,
+        bitcoin_id: elements::AssetId,
+    ) -> Vec<Input> {
         let mut inputs = Vec::with_capacity(self.0.len());
 
         for utxo in self.0 {
@@ -131,9 +132,7 @@ impl UtxoSet {
                 .at_derivation_index(utxo.index)
                 .expect("xpub with wildcard");
             let prevout = elements::TxOut {
-                asset: elements::confidential::Asset::Explicit(
-                    elements::AssetId::from_str(BITCOIN_ASSET_ID).expect("const"),
-                ),
+                asset: elements::confidential::Asset::Explicit(bitcoin_id),
                 value: elements::confidential::Value::Explicit(utxo.amount.to_sat()),
                 nonce: elements::confidential::Nonce::Null,
                 script_pubkey: child_descriptor.script_pubkey(),
@@ -157,15 +156,25 @@ pub struct Input {
     pub prevout: elements::TxOut,
 }
 
-#[derive(Default)]
 struct TransactionBuilder {
     inputs: Vec<elements::TxIn>,
     desc_indices: Vec<u32>,
     prevouts: Vec<elements::TxOut>,
     outputs: Vec<elements::TxOut>,
+    network: Network,
 }
 
 impl TransactionBuilder {
+    pub fn new(network: Network) -> Self {
+        Self {
+            inputs: vec![],
+            desc_indices: vec![],
+            prevouts: vec![],
+            outputs: vec![],
+            network,
+        }
+    }
+
     pub fn add_input(&mut self, input: Input) {
         self.inputs.push(input.input);
         self.desc_indices.push(input.index);
@@ -177,10 +186,7 @@ impl TransactionBuilder {
     }
 
     pub fn add_fee(&mut self, amount: bitcoin::Amount) {
-        let output = elements::TxOut::new_fee(
-            amount.to_sat(),
-            elements::AssetId::from_str(BITCOIN_ASSET_ID).expect("const"),
-        );
+        let output = elements::TxOut::new_fee(amount.to_sat(), self.network.bitcoin_id());
         self.outputs.push(output);
     }
 
@@ -218,6 +224,7 @@ impl TransactionBuilder {
                 sequence: tx.input[txin_index].sequence,
                 script_cmr,
                 control_block,
+                genesis_hash: self.network.genesis_hash(),
                 cache: cache.clone(),
             };
 
@@ -284,6 +291,7 @@ where
     // Taproot variables
     script_cmr: simplicity::Cmr,
     control_block: elements::taproot::ControlBlock,
+    genesis_hash: elements::BlockHash,
     // Use Rc<RefCell<_>> because Satisfier methods take &self while we need internal mutability
     cache: Rc<RefCell<simplicity::sighash::SighashCache<T>>>,
 }
@@ -350,7 +358,7 @@ where
                 &self.prevouts,
                 self.script_cmr,
                 self.control_block.clone(),
-                elements::BlockHash::from_str(ELEMENTS_REGTEST_GENESIS_BLOCK_HASH).expect("const"),
+                self.genesis_hash,
             )
             .ok()?;
 

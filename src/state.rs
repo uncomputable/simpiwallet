@@ -12,6 +12,7 @@ use serde::{Deserialize, Serialize};
 use crate::descriptor;
 use crate::error::Error;
 use crate::key::DescriptorSecretKey;
+use crate::network::Network;
 use crate::rpc::Connection;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -22,6 +23,7 @@ pub struct State {
     #[serde(with = "bitcoin::amount::serde::as_sat")]
     fee: bitcoin::Amount,
     rpc: Connection,
+    network: Network,
 }
 
 impl State {
@@ -37,6 +39,7 @@ impl State {
             next_index: 0,
             fee: bitcoin::Amount::from_sat(1000),
             rpc: Connection::default(),
+            network: Network::Testnet,
         }
     }
 
@@ -71,7 +74,7 @@ impl State {
             .at_derivation_index(index)
             .expect("valid child index");
         let address = child
-            .address(&elements::AddressParams::ELEMENTS)
+            .address(self.network.address_params())
             .expect("taproot address");
         Ok(address)
     }
@@ -90,6 +93,10 @@ impl State {
 
     pub fn set_rpc(&mut self, rpc: Connection) {
         self.rpc = rpc;
+    }
+
+    pub fn network(&self) -> Network {
+        self.network
     }
 
     pub fn load<P: AsRef<Path>>(path: P) -> Result<Self, Error> {
