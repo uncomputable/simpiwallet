@@ -213,7 +213,7 @@ impl TransactionBuilder {
             let child_descriptor = parent_descriptor
                 .at_derivation_index(desc_index)
                 .expect("valid child index");
-            let (script_cmr, control_block) = get_cmr_control_block(&child_descriptor)?;
+            let (script_cmr, control_block) = get_taproot_info(&child_descriptor)?;
 
             let satisfier = DynamicSigner {
                 keymap,
@@ -251,7 +251,7 @@ impl TransactionBuilder {
     }
 }
 
-fn get_cmr_control_block(
+fn get_taproot_info(
     descriptor: &Descriptor<DefiniteDescriptorKey>,
 ) -> Option<(simplicity::Cmr, elements::taproot::ControlBlock)> {
     if let Descriptor::Tr(tr) = descriptor {
