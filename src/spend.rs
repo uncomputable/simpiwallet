@@ -344,6 +344,24 @@ where
     T: Deref<Target = elements::Transaction> + Clone,
     O: Borrow<elements::TxOut>,
 {
+    fn lookup_tap_key_spend_sig(&self) -> Option<elements::SchnorrSig> {
+        let internal_key = self.control_block.internal_key;
+        let keypair = self.get_keypair(internal_key.to_public_key())?;
+        let sighash = self
+            .cache
+            .borrow_mut()
+            .taproot_key_spend_signature_hash(
+                self.input_index,
+                &self.prevouts,
+                elements::sighash::SchnorrSigHashType::All,
+                self.genesis_hash,
+            )
+            .ok()?;
+
+        let signature = self.get_signature(sighash.as_ref(), &keypair);
+        Some(signature)
+    }
+
     fn lookup_tap_leaf_script_sig(
         &self,
         pk: &Pk,
