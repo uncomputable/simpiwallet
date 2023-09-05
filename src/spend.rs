@@ -256,8 +256,7 @@ fn get_taproot_info(
 ) -> Option<(simplicity::Cmr, elements::taproot::ControlBlock)> {
     if let Descriptor::Tr(tr) = descriptor {
         if let TapTree::SimplicityLeaf(policy) = tr.taptree().as_ref()? {
-            let commit = policy.serialize_no_witness();
-            let cmr = commit.cmr();
+            let cmr = policy.cmr();
 
             let script = elements::Script::from(cmr.as_ref().to_vec());
             let script_ver = (script, simplicity::leaf_version());

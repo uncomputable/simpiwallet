@@ -4,8 +4,8 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-simplicity = { git = "https://github.com/uncomputable/rust-simplicity", branch = "policy-fixes-old", features = ["serde"] }
-elements-miniscript = { git = "https://github.com/uncomputable/elements-miniscript", branch = "simplicity-old", features = ["serde"] }
+simplicity = { git = "https://github.com/BlockstreamResearch/rust-simplicity", rev = "8ed4d4e0caf550148f1e17784af7665bad74b384", features = ["serde"] }
+elements-miniscript = { git = "https://github.com/uncomputable/elements-miniscript", rev = "6d352e8ec65d31a8a7034eec80292236fa6d84cb", features = ["serde"] }
 lexopt = "0.3"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
