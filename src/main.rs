@@ -7,8 +7,11 @@ mod rpc;
 mod spend;
 mod state;
 
+use std::path::PathBuf;
+
 use elements_miniscript as miniscript;
 use miniscript::bitcoin;
+use simplicity::human_encoding;
 
 use crate::error::Error;
 use crate::key::DescriptorSecretKey;
@@ -24,6 +27,7 @@ pub enum Command {
     SetFee { fee: bitcoin::Amount },
     SetRpc { rpc: rpc::Connection },
     SetNetwork { network: Network },
+    ImportProgram { path: PathBuf },
 }
 
 fn main() -> Result<(), Error> {
@@ -69,6 +73,16 @@ fn main() -> Result<(), Error> {
             let mut state = State::load("state.json")?;
             println!("New network: {}", network);
             state.set_network(network);
+            state.save("state.json", false)?;
+        }
+        Command::ImportProgram { path } => {
+            let file = std::fs::read_to_string(path)?;
+            let forest = human_encoding::Forest::<simplicity::jet::Elements>::parse(&file)?;
+            let cmr = forest.roots()["main"].cmr();
+
+            let mut state = State::load("state.json")?;
+            println!("New CMR: {}", cmr);
+            state.add_cmr(cmr);
             state.save("state.json", false)?;
         }
     }

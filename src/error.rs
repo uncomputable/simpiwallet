@@ -7,6 +7,7 @@ use miniscript::elements;
 pub enum Error {
     Cli(lexopt::Error),
     Simplicity(simplicity::Error),
+    HumanEncoding(simplicity::human_encoding::ErrorSet),
     Miniscript(miniscript::Error),
     Json(serde_json::Error),
     IO(io::Error),
@@ -42,6 +43,7 @@ impl fmt::Display for Error {
         match self {
             Error::Cli(error) => write!(f, "{}", error),
             Error::Simplicity(error) => write!(f, "{}", error),
+            Error::HumanEncoding(error) => write!(f, "{}", error),
             Error::Miniscript(error) => write!(f, "{}", error),
             Error::Json(error) => write!(f, "{}", error),
             Error::IO(error) => write!(f, "{}", error),
@@ -64,6 +66,12 @@ impl From<lexopt::Error> for Error {
 impl From<simplicity::Error> for Error {
     fn from(error: simplicity::Error) -> Self {
         Error::Simplicity(error)
+    }
+}
+
+impl From<simplicity::human_encoding::ErrorSet> for Error {
+    fn from(error: simplicity::human_encoding::ErrorSet) -> Self {
+        Error::HumanEncoding(error)
     }
 }
 
