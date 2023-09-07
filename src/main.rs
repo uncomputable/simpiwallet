@@ -81,8 +81,9 @@ fn main() -> Result<(), Error> {
             let cmr = forest.roots()["main"].cmr();
 
             let mut state = State::load("state.json")?;
-            println!("New CMR: {}", cmr);
-            state.add_cmr(cmr);
+            if state.assembly_mut().insert(cmr) {
+                println!("New CMR: {}", cmr);
+            }
             state.save("state.json", false)?;
         }
     }

@@ -1,4 +1,4 @@
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::fs::{File, OpenOptions};
 use std::io::{BufReader, BufWriter};
 use std::path::Path;
@@ -10,6 +10,7 @@ use miniscript::{elements, Descriptor, DescriptorPublicKey};
 use serde::{Deserialize, Serialize};
 
 use crate::descriptor;
+use crate::descriptor::AssemblySet;
 use crate::error::Error;
 use crate::key::DescriptorSecretKey;
 use crate::network::Network;
@@ -20,7 +21,7 @@ pub struct State {
     keymap: HashMap<DescriptorPublicKey, DescriptorSecretKey>,
     descriptor: Descriptor<DescriptorPublicKey>,
     next_index: u32,
-    seen_cmrs: HashSet<[u8; 32]>,
+    assembly: AssemblySet,
     #[serde(with = "bitcoin::amount::serde::as_sat")]
     fee: bitcoin::Amount,
     rpc: Connection,
@@ -38,7 +39,7 @@ impl State {
             keymap,
             descriptor,
             next_index: 0,
-            seen_cmrs: HashSet::new(),
+            assembly: AssemblySet::default(),
             fee: bitcoin::Amount::from_sat(1000),
             rpc: Connection::default(),
             network: Network::Testnet,
@@ -81,12 +82,12 @@ impl State {
         Ok(address)
     }
 
-    pub fn seen_cmr(&self, cmr: &simplicity::Cmr) -> bool {
-        self.seen_cmrs.contains(cmr.as_ref())
+    pub fn assembly(&self) -> &AssemblySet {
+        &self.assembly
     }
 
-    pub fn add_cmr(&mut self, cmr: simplicity::Cmr) {
-        self.seen_cmrs.insert(cmr.to_byte_array());
+    pub fn assembly_mut(&mut self) -> &mut AssemblySet {
+        &mut self.assembly
     }
 
     pub fn fee(&self) -> bitcoin::Amount {
