@@ -1,3 +1,6 @@
+use std::collections::HashMap;
+use std::fmt;
+use std::str::FromStr;
 use std::sync::Arc;
 
 use bitcoin::key::XOnlyPublicKey;
@@ -7,7 +10,7 @@ use elements_miniscript::ToPublicKey;
 use miniscript::descriptor::TapTree;
 use miniscript::elements;
 use miniscript::{Descriptor, MiniscriptKey};
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 use crate::key::UnspendableKey;
 
@@ -59,6 +62,7 @@ pub fn get_control_block<Pk: ToPublicKey>(
 #[derive(Serialize, Deserialize, Default, Debug, Clone)]
 pub struct AssemblySet {
     descriptors: Vec<Descriptor<XOnlyPublicKey>>,
+    satisfactions: HashMap<simplicity::Cmr, SerdeWitnessNode<simplicity::jet::Elements>>,
 }
 
 impl AssemblySet {
@@ -89,5 +93,57 @@ impl AssemblySet {
             .filter_map(|d| get_cmr(d).filter(|c| c == cmr).map(|_| d))
             .next()
             .map(|d| d.address(params).expect("taproot address"))
+    }
+}
+
+#[derive(Clone, Debug)]
+struct SerdeWitnessNode<J: simplicity::jet::Jet>(Arc<simplicity::RedeemNode<J>>);
+
+impl<J: simplicity::jet::Jet> SerdeWitnessNode<J> {
+    pub fn new(program: Arc<simplicity::WitnessNode<J>>) -> Result<Self, simplicity::Error> {
+        Ok(Self(program.finalize()?))
+    }
+
+    pub fn unwrap(&self) -> Arc<simplicity::WitnessNode<J>> {
+        self.0.to_witness_node()
+    }
+}
+
+impl<J: simplicity::jet::Jet> fmt::Display for SerdeWitnessNode<J> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let bytes = self.0.encode_to_vec();
+        let s = base64::Engine::encode(&base64::engine::general_purpose::STANDARD, bytes);
+        f.write_str(s.as_str())
+    }
+}
+
+impl<J: simplicity::jet::Jet> FromStr for SerdeWitnessNode<J> {
+    type Err = crate::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let bytes = base64::Engine::decode(&base64::engine::general_purpose::STANDARD, s)
+            .map_err(|e| crate::Error::CouldNotParse(e.to_string()))?;
+        let mut iter = simplicity::BitIter::from(bytes.into_iter());
+        let program = simplicity::RedeemNode::decode(&mut iter)?;
+        Ok(Self(program))
+    }
+}
+
+impl<J: simplicity::jet::Jet> Serialize for SerdeWitnessNode<J> {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.collect_str(self)
+    }
+}
+
+impl<'de, J: simplicity::jet::Jet> Deserialize<'de> for SerdeWitnessNode<J> {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let s = String::deserialize(deserializer)?;
+        SerdeWitnessNode::from_str(&s).map_err(serde::de::Error::custom)
     }
 }
