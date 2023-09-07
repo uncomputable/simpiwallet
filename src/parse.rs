@@ -1,3 +1,4 @@
+use std::io::Write;
 use std::str::FromStr;
 
 use lexopt::prelude::*;
@@ -115,5 +116,43 @@ where
         Ok(Some(a))
     } else {
         Err(arg.unexpected().into())
+    }
+}
+
+pub fn prompt<A>(message: &str) -> Result<A, Error>
+where
+    A: FromStr,
+    <A as FromStr>::Err: ToString,
+{
+    print!("{}", message);
+    std::io::stdout().flush()?;
+
+    let mut input = String::new();
+    std::io::stdin().read_line(&mut input)?;
+
+    match input.trim().parse::<A>() {
+        Ok(a) => Ok(a),
+        Err(err) => Err(Error::CouldNotParse(err.to_string())),
+    }
+}
+
+pub struct Choice(bool);
+
+impl FromStr for Choice {
+    type Err = &'static str;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match s {
+            "y" | "Y" => Ok(Choice(true)),
+            _ => Ok(Choice(false)),
+        }
+    }
+}
+
+impl From<Choice> for bool {
+    fn from(wrapper: Choice) -> Self {
+        match wrapper {
+            Choice(inner) => inner,
+        }
     }
 }
