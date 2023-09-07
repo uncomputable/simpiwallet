@@ -78,4 +78,16 @@ impl AssemblySet {
             true
         }
     }
+
+    pub fn get_address(
+        &self,
+        cmr: &simplicity::Cmr,
+        params: &'static elements::AddressParams,
+    ) -> Option<elements::Address> {
+        self.descriptors
+            .iter()
+            .filter_map(|d| get_cmr(d).filter(|c| c == cmr).map(|_| d))
+            .next()
+            .map(|d| d.address(params).expect("taproot address"))
+    }
 }

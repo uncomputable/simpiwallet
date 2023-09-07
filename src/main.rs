@@ -16,6 +16,7 @@ use simplicity::human_encoding;
 use crate::error::Error;
 use crate::key::DescriptorSecretKey;
 use crate::network::Network;
+use crate::parse::Choice;
 use crate::spend::Payment;
 use crate::state::State;
 
@@ -42,7 +43,27 @@ fn main() -> Result<(), Error> {
         }
         Command::GetNewAddress => {
             let mut state = State::load("state.json")?;
-            let address = state.next_address()?;
+
+            let mut asm: Vec<_> = state.assembly().iter().collect();
+            asm.sort();
+
+            let address = if !asm.is_empty()
+                && parse::prompt::<Choice>("Address of assembly fragment? y/n: ")?.into()
+            {
+                for (index, cmr) in asm.iter().enumerate() {
+                    println!("{}: {}", index, cmr);
+                }
+
+                let index: usize = parse::prompt("Assembly fragment index: ")?;
+                let cmr = asm.get(index).ok_or(Error::AssemblyOutOfBounds)?;
+                state
+                    .assembly()
+                    .get_address(cmr, state.network().address_params())
+                    .expect("set contains cmr")
+            } else {
+                state.next_address()?
+            };
+
             println!("{}", address);
             state.save("state.json", false)?;
         }

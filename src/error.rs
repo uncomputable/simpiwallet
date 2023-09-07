@@ -17,6 +17,7 @@ pub enum Error {
     NotEnoughFunds,
     CouldNotSatisfy,
     CouldNotParse(String),
+    AssemblyOutOfBounds,
 }
 
 impl Error {
@@ -53,6 +54,7 @@ impl fmt::Display for Error {
             Error::NotEnoughFunds => write!(f, "Not enough funds"),
             Error::CouldNotSatisfy => write!(f, "Could not satisfy"),
             Error::CouldNotParse(error) => write!(f, "Could not parse: {}", error),
+            Error::AssemblyOutOfBounds => write!(f, "Assembly fragment is out of bounds"),
         }
     }
 }
