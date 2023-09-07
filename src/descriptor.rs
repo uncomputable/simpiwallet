@@ -1,7 +1,9 @@
 use std::sync::Arc;
 
 use elements_miniscript as miniscript;
+use elements_miniscript::ToPublicKey;
 use miniscript::descriptor::TapTree;
+use miniscript::elements;
 use miniscript::{Descriptor, MiniscriptKey};
 
 use crate::key::UnspendableKey;
@@ -18,4 +20,35 @@ pub fn simplicity_asm<Pk: MiniscriptKey + UnspendableKey>(cmr: simplicity::Cmr) 
     let policy = simplicity::Policy::Assembly(cmr);
     let tree = TapTree::SimplicityLeaf(Arc::new(policy));
     Descriptor::new_tr(internal_key, Some(tree)).expect("single leaf is within bounds")
+}
+
+pub fn get_cmr<Pk: ToPublicKey>(descriptor: &Descriptor<Pk>) -> Option<simplicity::Cmr> {
+    match descriptor {
+        Descriptor::Tr(tr) => match tr.taptree() {
+            Some(TapTree::SimplicityLeaf(policy)) => Some(policy.cmr()),
+            _ => None,
+        },
+        _ => None,
+    }
+}
+
+pub fn get_control_block<Pk: ToPublicKey>(
+    descriptor: &Descriptor<Pk>,
+) -> Option<elements::taproot::ControlBlock> {
+    match descriptor {
+        Descriptor::Tr(tr) => match tr.taptree() {
+            Some(TapTree::SimplicityLeaf(policy)) => {
+                let cmr = policy.cmr();
+                let script = elements::Script::from(cmr.as_ref().to_vec());
+                let script_ver = (script, simplicity::leaf_version());
+                let control_block = tr
+                    .spend_info()
+                    .control_block(&script_ver)
+                    .expect("Control block must exist in script map for every known leaf");
+                Some(control_block)
+            }
+            _ => None,
+        },
+        _ => None,
+    }
 }

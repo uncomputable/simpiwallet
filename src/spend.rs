@@ -4,13 +4,12 @@ use std::collections::HashMap;
 use std::ops::Deref;
 use std::rc::Rc;
 
+use crate::descriptor;
 use elements::bitcoin;
 use elements::secp256k1_zkp;
 use elements_miniscript as miniscript;
-use elements_miniscript::descriptor::TapTree;
 use miniscript::{
-    elements, DefiniteDescriptorKey, Descriptor, DescriptorPublicKey, MiniscriptKey, Preimage32,
-    Satisfier, ToPublicKey,
+    elements, Descriptor, DescriptorPublicKey, MiniscriptKey, Preimage32, Satisfier, ToPublicKey,
 };
 
 use crate::error::Error;
@@ -213,7 +212,6 @@ impl TransactionBuilder {
             let child_descriptor = parent_descriptor
                 .at_derivation_index(desc_index)
                 .expect("valid child index");
-            let (script_cmr, control_block) = get_taproot_info(&child_descriptor)?;
 
             let satisfier = DynamicSigner {
                 keymap,
@@ -222,8 +220,8 @@ impl TransactionBuilder {
                 prevouts: elements::sighash::Prevouts::All(&self.prevouts),
                 locktime: tx.lock_time,
                 sequence: tx.input[txin_index].sequence,
-                script_cmr,
-                control_block,
+                script_cmr: descriptor::get_cmr(&child_descriptor)?,
+                control_block: descriptor::get_control_block(&child_descriptor)?,
                 genesis_hash: self.network.genesis_hash(),
                 cache: cache.clone(),
             };
@@ -248,29 +246,6 @@ impl TransactionBuilder {
         }
 
         Some(tx)
-    }
-}
-
-fn get_taproot_info(
-    descriptor: &Descriptor<DefiniteDescriptorKey>,
-) -> Option<(simplicity::Cmr, elements::taproot::ControlBlock)> {
-    if let Descriptor::Tr(tr) = descriptor {
-        if let TapTree::SimplicityLeaf(policy) = tr.taptree().as_ref()? {
-            let cmr = policy.cmr();
-
-            let script = elements::Script::from(cmr.as_ref().to_vec());
-            let script_ver = (script, simplicity::leaf_version());
-            let control_block = tr
-                .spend_info()
-                .control_block(&script_ver)
-                .expect("Control block must exist in script map for every known leaf");
-
-            Some((cmr, control_block))
-        } else {
-            None
-        }
-    } else {
-        None
     }
 }
 
