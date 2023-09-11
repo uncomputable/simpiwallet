@@ -17,13 +17,20 @@ use crate::key::DescriptorSecretKey;
 use crate::network::Network;
 use crate::state::{State, UtxoSet};
 
-pub fn get_balance(state: &State) -> Result<bitcoin::Amount, Error> {
-    let parent_descriptor = state.descriptor();
-    let script_pubkeys: Vec<_> =
-        descriptor::child_script_pubkeys(parent_descriptor, state.max_child_index()).collect();
-    let utxo_set = state.rpc().scan(&script_pubkeys)?;
-    dbg!(&utxo_set);
-    Ok(utxo_set.total_amount())
+pub fn get_spendable_balance(state: &State) -> Result<bitcoin::Amount, Error> {
+    let mut script_pubkeys: Vec<_> =
+        descriptor::child_script_pubkeys(state.descriptor(), state.max_child_index()).collect();
+    script_pubkeys.extend(state.assembly().spendable_script_pubkeys());
+    let utxos = state.rpc().scan(&script_pubkeys)?;
+    dbg!(&utxos);
+    Ok(utxos.total_amount())
+}
+
+pub fn get_locked_balance(state: &State) -> Result<bitcoin::Amount, Error> {
+    let script_pubkeys: Vec<_> = state.assembly().locked_script_pubkeys().collect();
+    let utxos = state.rpc().scan(&script_pubkeys)?;
+    dbg!(&utxos);
+    Ok(utxos.total_amount())
 }
 
 pub fn send_to_address(state: &mut State, send_to: Payment) -> Result<elements::Txid, Error> {

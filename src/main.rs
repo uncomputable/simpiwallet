@@ -73,8 +73,10 @@ fn main() -> Result<(), Error> {
         }
         Command::GetBalance => {
             let state = State::load("state.json")?;
-            let balance = spend::get_balance(&state)?;
-            println!("{}", balance);
+            let spendable_balance = spend::get_spendable_balance(&state)?;
+            let locked_balance = spend::get_locked_balance(&state)?;
+            println!("Spendable: {}", spendable_balance);
+            println!("Locked:    {}", locked_balance);
         }
         Command::SendToAddress { send_to } => {
             let mut state = State::load("state.json")?;

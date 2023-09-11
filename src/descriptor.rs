@@ -107,6 +107,28 @@ impl AssemblySet {
             .map(|d| d.address(params).expect("taproot address"))
     }
 
+    pub fn locked_script_pubkeys(&self) -> impl Iterator<Item = elements::Script> + '_ {
+        self.descriptors
+            .iter()
+            .filter_map(|d| {
+                get_cmr(d)
+                    .filter(|c| !self.satisfactions.contains_key(&c))
+                    .map(|_| d)
+            })
+            .map(|d| d.script_pubkey())
+    }
+
+    pub fn spendable_script_pubkeys(&self) -> impl Iterator<Item = elements::Script> + '_ {
+        self.descriptors
+            .iter()
+            .filter_map(|d| {
+                get_cmr(d)
+                    .filter(|c| self.satisfactions.contains_key(&c))
+                    .map(|_| d)
+            })
+            .map(|d| d.script_pubkey())
+    }
+
     pub fn insert_satisfaction(
         &mut self,
         program: &simplicity::WitnessNode<simplicity::jet::Elements>,
