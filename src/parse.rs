@@ -16,7 +16,10 @@ const SEND_TO_ADDRESS_HELP: &str = "simpiwallet sendtoaddress ADDRESS AMOUNT";
 const SET_FEE_HELP: &str = "simpiwallet setfee AMOUNT";
 const SET_RPC_HELP: &str = "simpiwallet setrpc URL PORT USERNAME [PASSWORD]";
 const SET_NETWORK_HELP: &str = "simpiwallet setnetwork [regtest | testnet]";
-const IMPORT_PROGRAM_HELP: &str = "simpiwallet importprogram PATH";
+const IMPORT_PROGRAM_HELP: &str = r#"simpiwallet importprogram PROGRAM
+
+Positional arguments:
+    PROGRAM  path to program in human encoding"#;
 const SATISFY_PROGRAM_HELP: &str = r#"simpiwallet satisfyprogram PROGRAM WITNESS
 
 Positional arguments:
@@ -58,8 +61,8 @@ pub fn command() -> Result<Command, Error> {
                     Ok(Command::SetNetwork { network })
                 }
                 "importprogram" => {
-                    let path = argument(&mut parser, "path")?;
-                    Ok(Command::ImportProgram { path })
+                    let program = argument(&mut parser, "program")?;
+                    Ok(Command::ImportProgram { program })
                 }
                 "satisfyprogram" => {
                     let program = argument(&mut parser, "program")?;

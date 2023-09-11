@@ -31,7 +31,7 @@ pub enum Command {
     SetFee { fee: bitcoin::Amount },
     SetRpc { rpc: rpc::Connection },
     SetNetwork { network: Network },
-    ImportProgram { path: PathBuf },
+    ImportProgram { program: PathBuf },
     SatisfyProgram { program: PathBuf, witness: PathBuf },
 }
 
@@ -100,8 +100,8 @@ fn main() -> Result<(), Error> {
             state.set_network(network);
             state.save("state.json", false)?;
         }
-        Command::ImportProgram { path } => {
-            let file = std::fs::read_to_string(path)?;
+        Command::ImportProgram { program } => {
+            let file = std::fs::read_to_string(program)?;
             let forest = human_encoding::Forest::<simplicity::jet::Elements>::parse(&file)?;
             let cmr = forest.roots()["main"].cmr();
 
