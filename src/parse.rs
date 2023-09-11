@@ -8,7 +8,7 @@ use crate::rpc::Connection;
 use crate::spend::Payment;
 use crate::Command;
 
-const HELP: &str = "Usage: simpiwallet [new | getnewaddress | getbalance | sendtoaddress | setfee | setrpc | setnetwork | importprogram | help]";
+const HELP: &str = r#"Usage: simpiwallet [new | getnewaddress | getbalance | sendtoaddress | setfee | setrpc | setnetwork | importprogram | satisfyprogram | help] args..."#;
 const NEW_HELP: &str = "simpiwallet new";
 const GET_NEW_ADDRESS_HELP: &str = "simpiwallet getnewaddress";
 const GET_BALANCE_HELP: &str = "simpiwallet getbalance";
@@ -17,8 +17,13 @@ const SET_FEE_HELP: &str = "simpiwallet setfee AMOUNT";
 const SET_RPC_HELP: &str = "simpiwallet setrpc URL PORT USERNAME [PASSWORD]";
 const SET_NETWORK_HELP: &str = "simpiwallet setnetwork [regtest | testnet]";
 const IMPORT_PROGRAM_HELP: &str = "simpiwallet importprogram PATH";
+const SATISFY_PROGRAM_HELP: &str = r#"simpiwallet satisfyprogram PROGRAM WITNESS
+
+Positional arguments:
+    PROGRAM  path to program in human encoding
+    WITNESS  path to witness data in JSON encoding"#;
 const HELP_HELP: &str =
-    "simpiwallet help [new | getnewaddress | getbalance | sendtoaddress | setfee | setrpc | setnetwork | importprogram]";
+    "simpiwallet help [new | getnewaddress | getbalance | sendtoaddress | setfee | setrpc | setnetwork | importprogram | satisfyprogram]";
 
 pub fn command() -> Result<Command, Error> {
     let mut parser = lexopt::Parser::from_env();
@@ -56,6 +61,11 @@ pub fn command() -> Result<Command, Error> {
                     let path = argument(&mut parser, "path")?;
                     Ok(Command::ImportProgram { path })
                 }
+                "satisfyprogram" => {
+                    let program = argument(&mut parser, "program")?;
+                    let witness = argument(&mut parser, "witness")?;
+                    Ok(Command::SatisfyProgram { program, witness })
+                }
                 "help" => {
                     let help = match optional_argument::<String>(&mut parser)?.as_deref() {
                         Some("new") => NEW_HELP,
@@ -66,6 +76,7 @@ pub fn command() -> Result<Command, Error> {
                         Some("setrpc") => SET_RPC_HELP,
                         Some("setnetwork") => SET_NETWORK_HELP,
                         Some("importprogram") => IMPORT_PROGRAM_HELP,
+                        Some("satisfyprogram") => SATISFY_PROGRAM_HELP,
                         Some("help") => HELP_HELP,
                         _ => HELP,
                     };
