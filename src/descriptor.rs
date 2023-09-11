@@ -94,6 +94,18 @@ impl AssemblySet {
             .next()
             .map(|d| d.address(params).expect("taproot address"))
     }
+
+    pub fn insert_satisfaction(
+        &mut self,
+        program: &simplicity::WitnessNode<simplicity::jet::Elements>,
+    ) -> Result<bool, simplicity::Error> {
+        let finalized = program.finalize()?;
+        let replace = self
+            .satisfactions
+            .insert(program.cmr(), SerdeWitnessNode::new_unchecked(finalized))
+            .is_some();
+        Ok(replace)
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -102,6 +114,10 @@ struct SerdeWitnessNode<J: simplicity::jet::Jet>(Arc<simplicity::RedeemNode<J>>)
 impl<J: simplicity::jet::Jet> SerdeWitnessNode<J> {
     pub fn new(program: Arc<simplicity::WitnessNode<J>>) -> Result<Self, simplicity::Error> {
         Ok(Self(program.finalize()?))
+    }
+
+    pub fn new_unchecked(program: Arc<simplicity::RedeemNode<J>>) -> Self {
+        Self(program)
     }
 
     pub fn unwrap(&self) -> Arc<simplicity::WitnessNode<J>> {

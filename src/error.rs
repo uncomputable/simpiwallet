@@ -18,6 +18,7 @@ pub enum Error {
     CouldNotSatisfy,
     CouldNotParse(String),
     AssemblyOutOfBounds,
+    UnknownAssembly(simplicity::Cmr),
 }
 
 impl Error {
@@ -55,6 +56,9 @@ impl fmt::Display for Error {
             Error::CouldNotSatisfy => write!(f, "Could not satisfy"),
             Error::CouldNotParse(error) => write!(f, "Could not parse: {}", error),
             Error::AssemblyOutOfBounds => write!(f, "Assembly fragment is out of bounds"),
+            Error::UnknownAssembly(cmr) => {
+                write!(f, "Unknown assembly fragment (not imported): {}", cmr)
+            }
         }
     }
 }

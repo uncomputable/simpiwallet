@@ -7,11 +7,14 @@ mod rpc;
 mod spend;
 mod state;
 
+use std::collections::HashMap;
 use std::path::PathBuf;
+use std::sync::Arc;
 
+use elements::hex::FromHex;
 use elements_miniscript as miniscript;
-use miniscript::bitcoin;
-use simplicity::human_encoding;
+use miniscript::{bitcoin, elements};
+use simplicity::{human_encoding, Value};
 
 use crate::error::Error;
 use crate::key::DescriptorSecretKey;
@@ -29,6 +32,7 @@ pub enum Command {
     SetRpc { rpc: rpc::Connection },
     SetNetwork { network: Network },
     ImportProgram { path: PathBuf },
+    SatisfyProgram { program: PathBuf, witness: PathBuf },
 }
 
 fn main() -> Result<(), Error> {
@@ -105,6 +109,36 @@ fn main() -> Result<(), Error> {
             if state.assembly_mut().insert(cmr) {
                 println!("New CMR: {}", cmr);
             }
+            state.save("state.json", false)?;
+        }
+        Command::SatisfyProgram { program, witness } => {
+            let mut state = State::load("state.json")?;
+
+            let file = std::fs::read_to_string(program)?;
+            let forest = human_encoding::Forest::<simplicity::jet::Elements>::parse(&file)?;
+            let cmr = forest.roots()["main"].cmr();
+
+            if !state.assembly().contains(cmr) {
+                return Err(Error::UnknownAssembly(cmr))?;
+            }
+
+            let file = std::fs::read_to_string(witness)?;
+            let name_to_hex: HashMap<String, String> = serde_json::from_str(&file)?;
+            let name_to_value = name_to_hex
+                .into_iter()
+                .map(|(name, hex)| {
+                    Vec::<u8>::from_hex(&hex)
+                        .map_err(|err| Error::CouldNotParse(err.to_string()))
+                        .map(|bytes| (Arc::<str>::from(name), Value::from_slice(&bytes)))
+                })
+                .collect::<Result<HashMap<Arc<str>, Arc<Value>>, Error>>()?;
+
+            let program = forest.to_witness_node(&name_to_value)?;
+            let replace = state.assembly_mut().insert_satisfaction(&program)?;
+            if replace {
+                println!("Replacing old satisfaction");
+            }
+
             state.save("state.json", false)?;
         }
     }
