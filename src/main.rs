@@ -120,7 +120,7 @@ fn main() -> Result<(), Error> {
             let forest = human_encoding::Forest::<simplicity::jet::Elements>::parse(&file)?;
             let cmr = forest.roots()["main"].cmr();
 
-            if !state.assembly().contains(cmr) {
+            if !state.assembly().contains(&cmr) {
                 return Err(Error::UnknownAssembly(cmr))?;
             }
 

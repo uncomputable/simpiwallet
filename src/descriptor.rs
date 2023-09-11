@@ -89,12 +89,12 @@ impl AssemblySet {
         self.descriptors.iter().filter_map(get_cmr)
     }
 
-    pub fn contains(&self, cmr: simplicity::Cmr) -> bool {
-        self.iter().any(|c| c == cmr)
+    pub fn contains(&self, cmr: &simplicity::Cmr) -> bool {
+        self.iter().any(|c| &c == cmr)
     }
 
     pub fn insert(&mut self, cmr: simplicity::Cmr) -> bool {
-        if self.contains(cmr) {
+        if self.contains(&cmr) {
             false
         } else {
             self.descriptors.push(simplicity_asm(cmr));
