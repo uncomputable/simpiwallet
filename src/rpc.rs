@@ -4,8 +4,8 @@ use elements::bitcoin;
 use elements_miniscript as miniscript;
 use jsonrpc::simple_http::SimpleHttpTransport;
 use jsonrpc::{simple_http, Client};
+use miniscript::elements;
 use miniscript::elements::hex::ToHex;
-use miniscript::{elements, DefiniteDescriptorKey, Descriptor, DescriptorPublicKey};
 
 use crate::error::Error;
 use crate::state::{Utxo, UtxoSet};
@@ -71,22 +71,18 @@ impl Connection {
         Ok(Client::with_transport(t))
     }
 
-    fn scantxoutset(
-        &self,
-        child_descriptors: &[Descriptor<DefiniteDescriptorKey>],
-        address_params: &'static elements::AddressParams,
-    ) -> Result<ScanTxOutResult, Error> {
+    fn scantxoutset(&self, script_pubkeys: &[elements::Script]) -> Result<ScanTxOutResult, Error> {
         let action = serde_json::Value::String("start".to_string());
 
-        let addresses: Vec<_> = child_descriptors
+        let descriptors: Vec<_> = script_pubkeys
             .iter()
-            .map(|d| d.address(address_params).expect("taproot address"))
-            .map(|a| format!("addr({})", a))
+            .map(|script| script.as_bytes().to_hex())
+            .map(|hex| format!("raw({})", hex))
             .map(serde_json::Value::String)
             .collect();
-        let addresses = serde_json::Value::Array(addresses);
+        let descriptors = serde_json::Value::Array(descriptors);
 
-        let parameters = [jsonrpc::arg(action), jsonrpc::arg(addresses)];
+        let parameters = [jsonrpc::arg(action), jsonrpc::arg(descriptors)];
 
         let client = self.client()?;
         let request = client.build_request("scantxoutset", &parameters);
@@ -95,27 +91,15 @@ impl Connection {
         response.result().map_err(|e| e.into())
     }
 
-    pub fn scan(
-        &self,
-        parent_descriptor: &Descriptor<DescriptorPublicKey>,
-        max_child_index: u32,
-        address_params: &'static elements::AddressParams,
-    ) -> Result<UtxoSet, Error> {
-        let child_descriptors: Vec<_> = (0..max_child_index)
-            .map(|i| {
-                parent_descriptor
-                    .at_derivation_index(i)
-                    .expect("valid child index")
-            })
-            .collect();
-        let result = self.scantxoutset(&child_descriptors, address_params)?;
+    pub fn scan(&self, script_pubkeys: &[elements::Script]) -> Result<UtxoSet, Error> {
+        let result = self.scantxoutset(script_pubkeys)?;
         let mut utxos = Vec::new();
 
         for unspent in result.unspents {
-            let index = child_descriptors
+            let index = script_pubkeys
                 .iter()
-                .position(|d| d.script_pubkey() == unspent.script_pub_key)
-                .expect("valid child index");
+                .position(|script_pubkey| script_pubkey == &unspent.script_pub_key)
+                .expect("Output script_pubkey was queried for");
             let utxo = Utxo {
                 index: index as u32, // safe cast because there are only u32 many child descriptors
                 amount: unspent.amount,

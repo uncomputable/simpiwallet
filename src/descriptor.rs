@@ -6,7 +6,7 @@ use std::sync::Arc;
 use bitcoin::key::XOnlyPublicKey;
 use elements::bitcoin;
 use elements_miniscript as miniscript;
-use elements_miniscript::ToPublicKey;
+use elements_miniscript::{DescriptorPublicKey, ToPublicKey};
 use miniscript::descriptor::TapTree;
 use miniscript::elements;
 use miniscript::{Descriptor, MiniscriptKey};
@@ -57,6 +57,18 @@ pub fn get_control_block<Pk: ToPublicKey>(
         },
         _ => None,
     }
+}
+
+pub fn child_script_pubkeys(
+    parent_descriptor: &Descriptor<DescriptorPublicKey>,
+    max_child_index: u32,
+) -> impl Iterator<Item = elements::Script> + '_ {
+    (0..max_child_index).map(|i| {
+        parent_descriptor
+            .at_derivation_index(i)
+            .expect("valid child index")
+            .script_pubkey()
+    })
 }
 
 #[derive(Serialize, Deserialize, Default, Debug, Clone)]

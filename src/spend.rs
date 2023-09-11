@@ -19,11 +19,9 @@ use crate::state::{State, UtxoSet};
 
 pub fn get_balance(state: &State) -> Result<bitcoin::Amount, Error> {
     let parent_descriptor = state.descriptor();
-    let utxo_set = state.rpc().scan(
-        parent_descriptor,
-        state.max_child_index(),
-        state.network().address_params(),
-    )?;
+    let script_pubkeys: Vec<_> =
+        descriptor::child_script_pubkeys(parent_descriptor, state.max_child_index()).collect();
+    let utxo_set = state.rpc().scan(&script_pubkeys)?;
     dbg!(&utxo_set);
     Ok(utxo_set.total_amount())
 }
@@ -35,11 +33,9 @@ pub fn send_to_address(state: &mut State, send_to: Payment) -> Result<elements::
         .at_derivation_index(change_index)
         .expect("valid child index");
 
-    let utxo_set = state.rpc().scan(
-        parent_descriptor,
-        state.max_child_index(),
-        state.network().address_params(),
-    )?;
+    let script_pubkeys: Vec<_> =
+        descriptor::child_script_pubkeys(parent_descriptor, state.max_child_index()).collect();
+    let utxo_set = state.rpc().scan(&script_pubkeys)?;
     let (selection, available) = utxo_set
         .select_coins(send_to.amount + state.fee())
         .ok_or(Error::NotEnoughFunds)?;
