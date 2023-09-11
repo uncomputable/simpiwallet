@@ -78,6 +78,13 @@ pub struct AssemblySet {
 }
 
 impl AssemblySet {
+    pub fn get(&self, cmr: &simplicity::Cmr) -> Option<&Descriptor<XOnlyPublicKey>> {
+        self.descriptors
+            .iter()
+            .filter_map(|d| get_cmr(d).filter(|c| c == cmr).map(|_| d))
+            .next()
+    }
+
     pub fn iter(&self) -> impl Iterator<Item = simplicity::Cmr> + '_ {
         self.descriptors.iter().filter_map(get_cmr)
     }
@@ -100,10 +107,7 @@ impl AssemblySet {
         cmr: &simplicity::Cmr,
         params: &'static elements::AddressParams,
     ) -> Option<elements::Address> {
-        self.descriptors
-            .iter()
-            .filter_map(|d| get_cmr(d).filter(|c| c == cmr).map(|_| d))
-            .next()
+        self.get(cmr)
             .map(|d| d.address(params).expect("taproot address"))
     }
 
