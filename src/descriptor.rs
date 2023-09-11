@@ -98,18 +98,17 @@ impl AssemblySet {
     pub fn insert_satisfaction(
         &mut self,
         program: &simplicity::WitnessNode<simplicity::jet::Elements>,
-    ) -> Result<bool, simplicity::Error> {
+    ) -> Result<Option<SerdeWitnessNode<simplicity::jet::Elements>>, simplicity::Error> {
         let finalized = program.finalize()?;
-        let replace = self
+        let maybe_replaced = self
             .satisfactions
-            .insert(program.cmr(), SerdeWitnessNode::new_unchecked(finalized))
-            .is_some();
-        Ok(replace)
+            .insert(program.cmr(), SerdeWitnessNode::new_unchecked(finalized));
+        Ok(maybe_replaced)
     }
 }
 
 #[derive(Clone, Debug)]
-struct SerdeWitnessNode<J: simplicity::jet::Jet>(Arc<simplicity::RedeemNode<J>>);
+pub struct SerdeWitnessNode<J: simplicity::jet::Jet>(Arc<simplicity::RedeemNode<J>>);
 
 impl<J: simplicity::jet::Jet> SerdeWitnessNode<J> {
     pub fn new(program: Arc<simplicity::WitnessNode<J>>) -> Result<Self, simplicity::Error> {

@@ -134,10 +134,15 @@ fn main() -> Result<(), Error> {
                 .collect::<Result<HashMap<Arc<str>, Arc<Value>>, Error>>()?;
 
             let program = forest.to_witness_node(&name_to_value)?;
-            let replace = state.assembly_mut().insert_satisfaction(&program)?;
-            if replace {
-                println!("Replacing old satisfaction");
+            let maybe_replaced = state.assembly_mut().insert_satisfaction(&program)?;
+
+            if let Some(replaced) = maybe_replaced {
+                println!("Replaced old satisfaction {}", replaced);
             }
+            println!("Inserted new satisfaction\n");
+            println!("Note that the wallet cannot check if the satisfaction is valid!");
+            println!("It is the responsibility of the user to provide a valid satisfaction.");
+            println!("The wallet will return an error if the satisfaction fails during spending.");
 
             state.save("state.json", false)?;
         }
