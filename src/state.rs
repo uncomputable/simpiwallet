@@ -6,14 +6,14 @@ use std::path::Path;
 use bitcoin::key::PublicKey;
 use elements::{bitcoin, secp256k1_zkp};
 use elements_miniscript as miniscript;
-use elements_miniscript::ToPublicKey;
+use elements_miniscript::TranslatePk;
 use miniscript::{elements, Descriptor, DescriptorPublicKey};
 use serde::{Deserialize, Serialize};
 
 use crate::descriptor;
 use crate::descriptor::AssemblySet;
 use crate::error::Error;
-use crate::key::DescriptorSecretKey;
+use crate::key::{DescriptorSecretKey, ToEvenY};
 use crate::network::Network;
 use crate::rpc::Connection;
 
@@ -64,7 +64,9 @@ impl State {
         Ok(self
             .descriptor
             .derived_descriptor(secp256k1_zkp::SECP256K1, i)
-            .expect("good xpub"))
+            .expect("good xpub")
+            .translate_pk(&mut ToEvenY)
+            .expect("never fails"))
     }
 
     pub fn child_descriptors(&self) -> impl Iterator<Item = Descriptor<PublicKey>> + '_ {
@@ -72,23 +74,35 @@ impl State {
             self.descriptor
                 .derived_descriptor(secp256k1_zkp::SECP256K1, i)
                 .expect("good xpub")
+                .translate_pk(&mut ToEvenY)
+                .expect("never fails")
         })
     }
 
     pub fn get_keypair(&self, key: &PublicKey) -> Option<elements::schnorr::KeyPair> {
-        for (desc_pk, desc_sk) in &self.keymap {
+        for parent_sk in self.keymap.values() {
             // TODO: Update once there is support for multiple descriptors
             for index in 0..self.next_index {
-                let child_public_key = desc_pk
+                let child_sk = parent_sk
                     .clone()
                     .at_derivation_index(index)
-                    .expect("good xpub")
-                    .to_public_key();
-                if &child_public_key == key {
-                    let child_secret_key = desc_sk.clone().at_derivation_index(index).ok()?;
+                    .ok()?
+                    .to_private_key()
+                    .inner;
+                if child_sk.public_key(secp256k1_zkp::SECP256K1) == key.inner {
                     let keypair = elements::schnorr::KeyPair::from_secret_key(
                         secp256k1_zkp::SECP256K1,
-                        &child_secret_key.to_private_key().inner,
+                        &child_sk,
+                    );
+                    return Some(keypair);
+                }
+                // Case where public key P with odd y-coordinate was converted
+                // into public key -P with even y-coordinate:
+                // P = xG and -P = (-x)G for the generator G
+                if child_sk.negate().public_key(secp256k1_zkp::SECP256K1) == key.inner {
+                    let keypair = elements::schnorr::KeyPair::from_secret_key(
+                        secp256k1_zkp::SECP256K1,
+                        &child_sk.negate(),
                     );
                     return Some(keypair);
                 }

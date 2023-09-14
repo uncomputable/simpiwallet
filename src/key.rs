@@ -132,6 +132,25 @@ impl DescriptorSecretKey {
     }
 }
 
+pub struct ToEvenY;
+
+impl miniscript::Translator<bitcoin::PublicKey, bitcoin::PublicKey, ()> for ToEvenY {
+    fn pk(&mut self, pk: &bitcoin::PublicKey) -> Result<bitcoin::PublicKey, ()> {
+        let parity = pk.inner.x_only_public_key().1;
+        match parity {
+            secp256k1_zkp::Parity::Even => Ok(*pk),
+            secp256k1_zkp::Parity::Odd => {
+                let pk = pk.inner.negate(secp256k1_zkp::SECP256K1).to_public_key();
+                let parity = pk.inner.x_only_public_key().1;
+                assert_eq!(secp256k1_zkp::Parity::Even, parity);
+                Ok(pk)
+            }
+        }
+    }
+
+    miniscript::translate_hash_clone!(bitcoin::PublicKey, bitcoin::PublicKey, ());
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
