@@ -5,7 +5,7 @@ edition = "2021"
 
 [dependencies]
 simplicity = { git = "https://github.com/uncomputable/rust-simplicity", rev = "33d57685beb6fb8835275eb9221b0ff715471ad9", features = ["serde"] }
-elements-miniscript = { git = "https://github.com/uncomputable/elements-miniscript", rev = "b6c3288d773a9d584f64b049f5583d62489bc55a", features = ["serde"] }
+elements-miniscript = { git = "https://github.com/uncomputable/elements-miniscript", rev = "3abe507373f7089b5a2bd69987d80511ac6a356f", features = ["serde"] }
 lexopt = "0.3"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
