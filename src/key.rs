@@ -4,6 +4,7 @@ use elements::bitcoin;
 use elements::secp256k1_zkp;
 use elements::secp256k1_zkp::rand::RngCore;
 use elements_miniscript as miniscript;
+use elements_miniscript::ToPublicKey;
 use miniscript::descriptor::{
     ConversionError, DescriptorSecretKey as MSDescriptorSecretKey, Wildcard,
 };
@@ -23,6 +24,14 @@ impl UnspendableKey for bitcoin::key::XOnlyPublicKey {
     fn unspendable() -> Self {
         bitcoin::key::XOnlyPublicKey::from_slice(&UNSPENDABLE_PUBLIC_KEY)
             .expect("unspendable pubkey is valid")
+    }
+}
+
+impl UnspendableKey for bitcoin::key::PublicKey {
+    fn unspendable() -> Self {
+        bitcoin::key::XOnlyPublicKey::unspendable()
+            .to_public_key()
+            .to_public_key()
     }
 }
 

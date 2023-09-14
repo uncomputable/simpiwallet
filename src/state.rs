@@ -3,8 +3,8 @@ use std::fs::{File, OpenOptions};
 use std::io::{BufReader, BufWriter};
 use std::path::Path;
 
-use elements::bitcoin;
-use elements::secp256k1_zkp;
+use bitcoin::key::PublicKey;
+use elements::{bitcoin, secp256k1_zkp};
 use elements_miniscript as miniscript;
 use miniscript::{elements, Descriptor, DescriptorPublicKey};
 use serde::{Deserialize, Serialize};
@@ -135,7 +135,7 @@ impl State {
 
 #[derive(Clone, Debug)]
 pub struct Utxo {
-    pub index: u32,
+    pub descriptor: Descriptor<PublicKey>,
     pub amount: bitcoin::amount::Amount,
     pub outpoint: elements::OutPoint,
 }

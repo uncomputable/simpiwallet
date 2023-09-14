@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use std::ops::Deref;
 use std::rc::Rc;
 
-use crate::descriptor;
+use bitcoin::key::PublicKey;
 use elements::bitcoin;
 use elements::secp256k1_zkp;
 use elements_miniscript as miniscript;
@@ -12,23 +12,24 @@ use miniscript::{
     elements, Descriptor, DescriptorPublicKey, MiniscriptKey, Preimage32, Satisfier, ToPublicKey,
 };
 
+use crate::descriptor;
 use crate::error::Error;
 use crate::key::DescriptorSecretKey;
 use crate::network::Network;
 use crate::state::{State, UtxoSet};
 
 pub fn get_spendable_balance(state: &State) -> Result<bitcoin::Amount, Error> {
-    let mut script_pubkeys: Vec<_> =
-        descriptor::child_script_pubkeys(state.descriptor(), state.max_child_index()).collect();
-    script_pubkeys.extend(state.assembly().spendable_script_pubkeys());
-    let utxos = state.rpc().scan(&script_pubkeys)?;
+    let mut descriptors: Vec<_> =
+        descriptor::child_descriptors(state.descriptor(), state.max_child_index()).collect();
+    descriptors.extend(state.assembly().spendable_descriptors().cloned());
+    let utxos = state.rpc().scan(descriptors)?;
     dbg!(&utxos);
     Ok(utxos.total_amount())
 }
 
 pub fn get_locked_balance(state: &State) -> Result<bitcoin::Amount, Error> {
-    let script_pubkeys: Vec<_> = state.assembly().locked_script_pubkeys().collect();
-    let utxos = state.rpc().scan(&script_pubkeys)?;
+    let descriptors: Vec<_> = state.assembly().locked_descriptors().cloned().collect();
+    let utxos = state.rpc().scan(descriptors)?;
     dbg!(&utxos);
     Ok(utxos.total_amount())
 }
@@ -40,9 +41,9 @@ pub fn send_to_address(state: &mut State, send_to: Payment) -> Result<elements::
         .at_derivation_index(change_index)
         .expect("valid child index");
 
-    let script_pubkeys: Vec<_> =
-        descriptor::child_script_pubkeys(parent_descriptor, state.max_child_index()).collect();
-    let utxo_set = state.rpc().scan(&script_pubkeys)?;
+    let descriptors: Vec<_> =
+        descriptor::child_descriptors(parent_descriptor, state.max_child_index()).collect();
+    let utxo_set = state.rpc().scan(descriptors)?;
     let (selection, available) = utxo_set
         .select_coins(send_to.amount + state.fee())
         .ok_or(Error::NotEnoughFunds)?;
@@ -56,7 +57,7 @@ pub fn send_to_address(state: &mut State, send_to: Payment) -> Result<elements::
 
     let mut builder = TransactionBuilder::new(state.network());
 
-    for input in selection.into_inputs(parent_descriptor, state.network().bitcoin_id()) {
+    for input in selection.into_inputs(state.network().bitcoin_id()) {
         builder.add_input(input);
     }
 
@@ -65,7 +66,7 @@ pub fn send_to_address(state: &mut State, send_to: Payment) -> Result<elements::
     builder.add_fee(state.fee());
 
     let tx = builder
-        .sign(parent_descriptor, state.keymap(), state.max_child_index())
+        .sign(state.keymap(), state.max_child_index())
         .ok_or(Error::CouldNotSatisfy)?;
     let txid = state.rpc().sendrawtransaction(&tx)?;
     Ok(txid)
@@ -114,11 +115,7 @@ impl UtxoSet {
         self.0.iter().map(|u| u.amount).sum()
     }
 
-    pub fn into_inputs(
-        self,
-        parent_descriptor: &Descriptor<DescriptorPublicKey>,
-        bitcoin_id: elements::AssetId,
-    ) -> Vec<Input> {
+    pub fn into_inputs(self, bitcoin_id: elements::AssetId) -> Vec<Input> {
         let mut inputs = Vec::with_capacity(self.0.len());
 
         for utxo in self.0 {
@@ -130,18 +127,15 @@ impl UtxoSet {
                 asset_issuance: elements::AssetIssuance::default(),
                 witness: elements::TxInWitness::default(),
             };
-            let child_descriptor = parent_descriptor
-                .at_derivation_index(utxo.index)
-                .expect("xpub with wildcard");
             let prevout = elements::TxOut {
                 asset: elements::confidential::Asset::Explicit(bitcoin_id),
                 value: elements::confidential::Value::Explicit(utxo.amount.to_sat()),
                 nonce: elements::confidential::Nonce::Null,
-                script_pubkey: child_descriptor.script_pubkey(),
+                script_pubkey: utxo.descriptor.script_pubkey(),
                 witness: elements::TxOutWitness::default(),
             };
             inputs.push(Input {
-                index: utxo.index,
+                descriptor: utxo.descriptor,
                 input,
                 prevout,
             });
@@ -153,14 +147,14 @@ impl UtxoSet {
 
 #[derive(Clone, Debug)]
 pub struct Input {
-    pub index: u32,
+    pub descriptor: Descriptor<PublicKey>,
     pub input: elements::TxIn,
     pub prevout: elements::TxOut,
 }
 
 struct TransactionBuilder {
     inputs: Vec<elements::TxIn>,
-    desc_indices: Vec<u32>,
+    descriptors: Vec<Descriptor<PublicKey>>,
     prevouts: Vec<elements::TxOut>,
     outputs: Vec<elements::TxOut>,
     network: Network,
@@ -170,7 +164,7 @@ impl TransactionBuilder {
     pub fn new(network: Network) -> Self {
         Self {
             inputs: vec![],
-            desc_indices: vec![],
+            descriptors: vec![],
             prevouts: vec![],
             outputs: vec![],
             network,
@@ -179,7 +173,7 @@ impl TransactionBuilder {
 
     pub fn add_input(&mut self, input: Input) {
         self.inputs.push(input.input);
-        self.desc_indices.push(input.index);
+        self.descriptors.push(input.descriptor);
         self.prevouts.push(input.prevout);
     }
 
@@ -203,7 +197,6 @@ impl TransactionBuilder {
 
     pub fn sign(
         &self,
-        parent_descriptor: &Descriptor<DescriptorPublicKey>,
         keymap: &HashMap<DescriptorPublicKey, DescriptorSecretKey>,
         max_key_index: u32,
     ) -> Option<elements::Transaction> {
@@ -211,11 +204,7 @@ impl TransactionBuilder {
         let cache = Rc::new(RefCell::new(simplicity::sighash::SighashCache::new(&tx)));
         let mut witnesses = Vec::with_capacity(self.inputs.len());
 
-        for (txin_index, desc_index) in self.desc_indices.iter().copied().enumerate() {
-            let child_descriptor = parent_descriptor
-                .at_derivation_index(desc_index)
-                .expect("valid child index");
-
+        for (txin_index, descriptor) in self.descriptors.iter().enumerate() {
             let satisfier = DynamicSigner {
                 keymap,
                 max_key_index,
@@ -223,13 +212,13 @@ impl TransactionBuilder {
                 prevouts: elements::sighash::Prevouts::All(&self.prevouts),
                 locktime: tx.lock_time,
                 sequence: tx.input[txin_index].sequence,
-                script_cmr: descriptor::get_cmr(&child_descriptor)?,
-                control_block: descriptor::get_control_block(&child_descriptor)?,
+                script_cmr: descriptor::get_cmr(descriptor)?,
+                control_block: descriptor::get_control_block(descriptor)?,
                 genesis_hash: self.network.genesis_hash(),
                 cache: cache.clone(),
             };
 
-            let (script_witness, script_sig) = child_descriptor.get_satisfaction(satisfier).ok()?;
+            let (script_witness, script_sig) = descriptor.get_satisfaction(satisfier).ok()?;
             assert!(
                 script_sig.is_empty(),
                 "No support for pre-segwit descriptors"

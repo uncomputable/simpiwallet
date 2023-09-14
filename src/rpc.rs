@@ -1,11 +1,12 @@
 use std::fmt;
 
+use bitcoin::key::PublicKey;
 use elements::bitcoin;
 use elements_miniscript as miniscript;
 use jsonrpc::simple_http::SimpleHttpTransport;
 use jsonrpc::{simple_http, Client};
-use miniscript::elements;
 use miniscript::elements::hex::ToHex;
+use miniscript::{elements, Descriptor};
 
 use crate::error::Error;
 use crate::state::{Utxo, UtxoSet};
@@ -71,12 +72,15 @@ impl Connection {
         Ok(Client::with_transport(t))
     }
 
-    fn scantxoutset(&self, script_pubkeys: &[elements::Script]) -> Result<ScanTxOutResult, Error> {
+    fn scantxoutset(
+        &self,
+        descriptors: &[Descriptor<PublicKey>],
+    ) -> Result<ScanTxOutResult, Error> {
         let action = serde_json::Value::String("start".to_string());
 
-        let descriptors: Vec<_> = script_pubkeys
+        let descriptors: Vec<_> = descriptors
             .iter()
-            .map(|script| script.as_bytes().to_hex())
+            .map(|desc| desc.script_pubkey().as_bytes().to_hex())
             .map(|hex| format!("raw({})", hex))
             .map(serde_json::Value::String)
             .collect();
@@ -91,17 +95,17 @@ impl Connection {
         response.result().map_err(|e| e.into())
     }
 
-    pub fn scan(&self, script_pubkeys: &[elements::Script]) -> Result<UtxoSet, Error> {
-        let result = self.scantxoutset(script_pubkeys)?;
+    pub fn scan(&self, mut descriptors: Vec<Descriptor<PublicKey>>) -> Result<UtxoSet, Error> {
+        let result = self.scantxoutset(&descriptors)?;
         let mut utxos = Vec::new();
 
         for unspent in result.unspents {
-            let index = script_pubkeys
+            let index = descriptors
                 .iter()
-                .position(|script_pubkey| script_pubkey == &unspent.script_pub_key)
+                .position(|desc| desc.script_pubkey() == unspent.script_pub_key)
                 .expect("Output script_pubkey was queried for");
             let utxo = Utxo {
-                index: index as u32, // safe cast because there are only u32 many child descriptors
+                descriptor: descriptors.remove(index),
                 amount: unspent.amount,
                 outpoint: elements::OutPoint {
                     txid: unspent.txid,

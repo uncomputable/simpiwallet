@@ -3,8 +3,8 @@ use std::fmt;
 use std::str::FromStr;
 use std::sync::Arc;
 
-use bitcoin::key::XOnlyPublicKey;
-use elements::bitcoin;
+use bitcoin::key::PublicKey;
+use elements::{bitcoin, secp256k1_zkp};
 use elements_miniscript as miniscript;
 use elements_miniscript::{DescriptorPublicKey, ToPublicKey};
 use miniscript::descriptor::TapTree;
@@ -59,26 +59,25 @@ pub fn get_control_block<Pk: ToPublicKey>(
     }
 }
 
-pub fn child_script_pubkeys(
+pub fn child_descriptors(
     parent_descriptor: &Descriptor<DescriptorPublicKey>,
     max_child_index: u32,
-) -> impl Iterator<Item = elements::Script> + '_ {
+) -> impl Iterator<Item = Descriptor<PublicKey>> + '_ {
     (0..max_child_index).map(|i| {
         parent_descriptor
-            .at_derivation_index(i)
-            .expect("valid child index")
-            .script_pubkey()
+            .derived_descriptor(secp256k1_zkp::SECP256K1, i)
+            .expect("good xpub")
     })
 }
 
 #[derive(Serialize, Deserialize, Default, Debug, Clone)]
 pub struct AssemblySet {
-    descriptors: Vec<Descriptor<XOnlyPublicKey>>,
+    descriptors: Vec<Descriptor<PublicKey>>,
     satisfactions: HashMap<simplicity::Cmr, SerdeWitnessNode<simplicity::jet::Elements>>,
 }
 
 impl AssemblySet {
-    pub fn get(&self, cmr: &simplicity::Cmr) -> Option<&Descriptor<XOnlyPublicKey>> {
+    pub fn get(&self, cmr: &simplicity::Cmr) -> Option<&Descriptor<PublicKey>> {
         self.descriptors
             .iter()
             .filter_map(|d| get_cmr(d).filter(|c| c == cmr).map(|_| d))
@@ -111,26 +110,20 @@ impl AssemblySet {
             .map(|d| d.address(params).expect("taproot address"))
     }
 
-    pub fn locked_script_pubkeys(&self) -> impl Iterator<Item = elements::Script> + '_ {
-        self.descriptors
-            .iter()
-            .filter_map(|d| {
-                get_cmr(d)
-                    .filter(|c| !self.satisfactions.contains_key(&c))
-                    .map(|_| d)
-            })
-            .map(|d| d.script_pubkey())
+    pub fn locked_descriptors(&self) -> impl Iterator<Item = &Descriptor<PublicKey>> {
+        self.descriptors.iter().filter_map(|d| {
+            get_cmr(d)
+                .filter(|c| !self.satisfactions.contains_key(c))
+                .map(|_| d)
+        })
     }
 
-    pub fn spendable_script_pubkeys(&self) -> impl Iterator<Item = elements::Script> + '_ {
-        self.descriptors
-            .iter()
-            .filter_map(|d| {
-                get_cmr(d)
-                    .filter(|c| self.satisfactions.contains_key(&c))
-                    .map(|_| d)
-            })
-            .map(|d| d.script_pubkey())
+    pub fn spendable_descriptors(&self) -> impl Iterator<Item = &Descriptor<PublicKey>> {
+        self.descriptors.iter().filter_map(|d| {
+            get_cmr(d)
+                .filter(|c| self.satisfactions.contains_key(c))
+                .map(|_| d)
+        })
     }
 
     pub fn insert_satisfaction(
