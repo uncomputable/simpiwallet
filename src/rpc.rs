@@ -95,17 +95,18 @@ impl Connection {
         response.result().map_err(|e| e.into())
     }
 
-    pub fn scan(&self, mut descriptors: Vec<Descriptor<PublicKey>>) -> Result<UtxoSet, Error> {
-        let result = self.scantxoutset(&descriptors)?;
+    pub fn scan(&self, descriptors: &[Descriptor<PublicKey>]) -> Result<UtxoSet, Error> {
+        let result = self.scantxoutset(descriptors)?;
         let mut utxos = Vec::new();
 
         for unspent in result.unspents {
-            let index = descriptors
+            let descriptor = descriptors
                 .iter()
-                .position(|desc| desc.script_pubkey() == unspent.script_pub_key)
-                .expect("Output script_pubkey was queried for");
+                .find(|desc| desc.script_pubkey() == unspent.script_pub_key)
+                .expect("Output script_pubkey was queried for")
+                .clone();
             let utxo = Utxo {
-                descriptor: descriptors.remove(index),
+                descriptor,
                 amount: unspent.amount,
                 outpoint: elements::OutPoint {
                     txid: unspent.txid,

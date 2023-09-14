@@ -18,14 +18,14 @@ use crate::state::{State, UtxoSet};
 pub fn get_spendable_balance(state: &State) -> Result<bitcoin::Amount, Error> {
     let mut descriptors: Vec<_> = state.child_descriptors().collect();
     descriptors.extend(state.assembly().spendable_descriptors().cloned());
-    let utxos = state.rpc().scan(descriptors)?;
+    let utxos = state.rpc().scan(&descriptors)?;
     dbg!(&utxos);
     Ok(utxos.total_amount())
 }
 
 pub fn get_locked_balance(state: &State) -> Result<bitcoin::Amount, Error> {
     let descriptors: Vec<_> = state.assembly().locked_descriptors().cloned().collect();
-    let utxos = state.rpc().scan(descriptors)?;
+    let utxos = state.rpc().scan(&descriptors)?;
     dbg!(&utxos);
     Ok(utxos.total_amount())
 }
@@ -35,7 +35,7 @@ pub fn send_to_address(state: &mut State, send_to: Payment) -> Result<elements::
 
     let mut descriptors: Vec<_> = state.child_descriptors().collect();
     descriptors.extend(state.assembly().spendable_descriptors().cloned());
-    let utxo_set = state.rpc().scan(descriptors)?;
+    let utxo_set = state.rpc().scan(&descriptors)?;
     let (selection, available) = utxo_set
         .select_coins(send_to.amount + state.fee())
         .ok_or(Error::NotEnoughFunds)?;
