@@ -16,8 +16,7 @@ use crate::network::Network;
 use crate::state::{State, UtxoSet};
 
 pub fn get_spendable_balance(state: &State) -> Result<bitcoin::Amount, Error> {
-    let mut descriptors: Vec<_> =
-        descriptor::child_descriptors(state.descriptor(), state.max_child_index()).collect();
+    let mut descriptors: Vec<_> = state.child_descriptors().collect();
     descriptors.extend(state.assembly().spendable_descriptors().cloned());
     let utxos = state.rpc().scan(descriptors)?;
     dbg!(&utxos);
@@ -32,14 +31,9 @@ pub fn get_locked_balance(state: &State) -> Result<bitcoin::Amount, Error> {
 }
 
 pub fn send_to_address(state: &mut State, send_to: Payment) -> Result<elements::Txid, Error> {
-    let change_index = state.next_index()?;
-    let parent_descriptor = state.descriptor();
-    let change_descriptor = parent_descriptor
-        .at_derivation_index(change_index)
-        .expect("valid child index");
+    let change_descriptor = state.next_child_descriptor()?;
 
-    let mut descriptors: Vec<_> =
-        descriptor::child_descriptors(state.descriptor(), state.max_child_index()).collect();
+    let mut descriptors: Vec<_> = state.child_descriptors().collect();
     descriptors.extend(state.assembly().spendable_descriptors().cloned());
     let utxo_set = state.rpc().scan(descriptors)?;
     let (selection, available) = utxo_set

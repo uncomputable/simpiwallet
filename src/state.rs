@@ -47,11 +47,7 @@ impl State {
         }
     }
 
-    pub fn descriptor(&self) -> &Descriptor<DescriptorPublicKey> {
-        &self.descriptor
-    }
-
-    pub fn next_index(&mut self) -> Result<u32, Error> {
+    fn next_index(&mut self) -> Result<u32, Error> {
         if self.next_index & (1 << 31) == 0 {
             let index = self.next_index;
             self.next_index += 1;
@@ -63,8 +59,20 @@ impl State {
         }
     }
 
-    pub fn max_child_index(&self) -> u32 {
-        self.next_index
+    pub fn next_child_descriptor(&mut self) -> Result<Descriptor<PublicKey>, Error> {
+        let i = self.next_index()?;
+        Ok(self
+            .descriptor
+            .derived_descriptor(secp256k1_zkp::SECP256K1, i)
+            .expect("good xpub"))
+    }
+
+    pub fn child_descriptors(&self) -> impl Iterator<Item = Descriptor<PublicKey>> + '_ {
+        (0..self.next_index).map(|i| {
+            self.descriptor
+                .derived_descriptor(secp256k1_zkp::SECP256K1, i)
+                .expect("good xpub")
+        })
     }
 
     pub fn get_keypair(&self, key: &PublicKey) -> Option<elements::schnorr::KeyPair> {

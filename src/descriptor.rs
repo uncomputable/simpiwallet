@@ -4,9 +4,9 @@ use std::str::FromStr;
 use std::sync::Arc;
 
 use bitcoin::key::PublicKey;
-use elements::{bitcoin, secp256k1_zkp};
+use elements::bitcoin;
 use elements_miniscript as miniscript;
-use elements_miniscript::{DescriptorPublicKey, ToPublicKey};
+use elements_miniscript::ToPublicKey;
 use miniscript::descriptor::TapTree;
 use miniscript::elements;
 use miniscript::{Descriptor, MiniscriptKey};
@@ -57,17 +57,6 @@ pub fn get_control_block<Pk: ToPublicKey>(
         },
         _ => None,
     }
-}
-
-pub fn child_descriptors(
-    parent_descriptor: &Descriptor<DescriptorPublicKey>,
-    max_child_index: u32,
-) -> impl Iterator<Item = Descriptor<PublicKey>> + '_ {
-    (0..max_child_index).map(|i| {
-        parent_descriptor
-            .derived_descriptor(secp256k1_zkp::SECP256K1, i)
-            .expect("good xpub")
-    })
 }
 
 #[derive(Serialize, Deserialize, Default, Debug, Clone)]
