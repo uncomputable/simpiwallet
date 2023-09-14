@@ -2,6 +2,7 @@ use std::borrow::Borrow;
 use std::cell::RefCell;
 use std::ops::Deref;
 use std::rc::Rc;
+use std::sync::Arc;
 
 use bitcoin::key::PublicKey;
 use elements::bitcoin;
@@ -37,8 +38,9 @@ pub fn send_to_address(state: &mut State, send_to: Payment) -> Result<elements::
         .at_derivation_index(change_index)
         .expect("valid child index");
 
-    let descriptors: Vec<_> =
-        descriptor::child_descriptors(parent_descriptor, state.max_child_index()).collect();
+    let mut descriptors: Vec<_> =
+        descriptor::child_descriptors(state.descriptor(), state.max_child_index()).collect();
+    descriptors.extend(state.assembly().spendable_descriptors().cloned());
     let utxo_set = state.rpc().scan(descriptors)?;
     let (selection, available) = utxo_set
         .select_coins(send_to.amount + state.fee())
@@ -320,5 +322,12 @@ where
 
     fn check_after(&self, locktime: elements::LockTime) -> bool {
         Satisfier::<Pk>::check_after(&self.locktime, locktime)
+    }
+
+    fn lookup_asm_program(
+        &self,
+        cmr: simplicity::Cmr,
+    ) -> Option<Arc<simplicity::WitnessNode<simplicity::jet::Elements>>> {
+        self.state.assembly().get_satisfaction(&cmr)
     }
 }

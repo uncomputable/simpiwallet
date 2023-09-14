@@ -136,12 +136,20 @@ impl AssemblySet {
             .insert(program.cmr(), SerdeWitnessNode::new_unchecked(finalized));
         Ok(maybe_replaced)
     }
+
+    pub fn get_satisfaction(
+        &self,
+        cmr: &simplicity::Cmr,
+    ) -> Option<Arc<simplicity::WitnessNode<simplicity::jet::Elements>>> {
+        self.satisfactions.get(cmr).map(SerdeWitnessNode::unwrap)
+    }
 }
 
 #[derive(Clone, Debug)]
 pub struct SerdeWitnessNode<J: simplicity::jet::Jet>(Arc<simplicity::RedeemNode<J>>);
 
 impl<J: simplicity::jet::Jet> SerdeWitnessNode<J> {
+    #[allow(dead_code)]
     pub fn new(program: Arc<simplicity::WitnessNode<J>>) -> Result<Self, simplicity::Error> {
         Ok(Self(program.finalize()?))
     }
