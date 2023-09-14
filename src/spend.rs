@@ -1,6 +1,5 @@
 use std::borrow::Borrow;
 use std::cell::RefCell;
-use std::collections::HashMap;
 use std::ops::Deref;
 use std::rc::Rc;
 
@@ -8,13 +7,10 @@ use bitcoin::key::PublicKey;
 use elements::bitcoin;
 use elements::secp256k1_zkp;
 use elements_miniscript as miniscript;
-use miniscript::{
-    elements, Descriptor, DescriptorPublicKey, MiniscriptKey, Preimage32, Satisfier, ToPublicKey,
-};
+use miniscript::{elements, Descriptor, MiniscriptKey, Preimage32, Satisfier, ToPublicKey};
 
 use crate::descriptor;
 use crate::error::Error;
-use crate::key::DescriptorSecretKey;
 use crate::network::Network;
 use crate::state::{State, UtxoSet};
 
@@ -65,9 +61,7 @@ pub fn send_to_address(state: &mut State, send_to: Payment) -> Result<elements::
     builder.add_output(change.to_output(state.network().bitcoin_id()));
     builder.add_fee(state.fee());
 
-    let tx = builder
-        .sign(state.keymap(), state.max_child_index())
-        .ok_or(Error::CouldNotSatisfy)?;
+    let tx = builder.sign(state).ok_or(Error::CouldNotSatisfy)?;
     let txid = state.rpc().sendrawtransaction(&tx)?;
     Ok(txid)
 }
@@ -195,26 +189,19 @@ impl TransactionBuilder {
         }
     }
 
-    pub fn sign(
-        &self,
-        keymap: &HashMap<DescriptorPublicKey, DescriptorSecretKey>,
-        max_key_index: u32,
-    ) -> Option<elements::Transaction> {
+    pub fn sign(&self, state: &State) -> Option<elements::Transaction> {
         let mut tx = self.to_transaction();
         let cache = Rc::new(RefCell::new(simplicity::sighash::SighashCache::new(&tx)));
         let mut witnesses = Vec::with_capacity(self.inputs.len());
 
         for (txin_index, descriptor) in self.descriptors.iter().enumerate() {
             let satisfier = DynamicSigner {
-                keymap,
-                max_key_index,
+                state,
+                descriptor,
                 input_index: txin_index,
                 prevouts: elements::sighash::Prevouts::All(&self.prevouts),
                 locktime: tx.lock_time,
                 sequence: tx.input[txin_index].sequence,
-                script_cmr: descriptor::get_cmr(descriptor)?,
-                control_block: descriptor::get_control_block(descriptor)?,
-                genesis_hash: self.network.genesis_hash(),
                 cache: cache.clone(),
             };
 
@@ -246,18 +233,15 @@ where
     T: Deref<Target = elements::Transaction> + Clone,
     O: Borrow<elements::TxOut>,
 {
-    // Key variables
-    keymap: &'a HashMap<DescriptorPublicKey, DescriptorSecretKey>,
-    max_key_index: u32,
+    // Global state
+    state: &'a State,
+    // UTXO descriptor
+    descriptor: &'a Descriptor<PublicKey>,
     // Transaction variables
     input_index: usize,
     prevouts: elements::sighash::Prevouts<'a, O>,
     locktime: elements::LockTime,
     sequence: elements::Sequence,
-    // Taproot variables
-    script_cmr: simplicity::Cmr,
-    control_block: elements::taproot::ControlBlock,
-    genesis_hash: elements::BlockHash,
     // Use Rc<RefCell<_>> because Satisfier methods take &self while we need internal mutability
     cache: Rc<RefCell<simplicity::sighash::SighashCache<T>>>,
 }
@@ -267,33 +251,7 @@ where
     T: Deref<Target = elements::Transaction> + Clone,
     O: Borrow<elements::TxOut>,
 {
-    fn get_keypair(&self, pk: bitcoin::PublicKey) -> Option<elements::schnorr::KeyPair> {
-        for (desc_pk, desc_sk) in self.keymap {
-            // TODO: Update once there is support for multiple descriptors
-            for index in 0..self.max_key_index {
-                let child_public_key = desc_pk
-                    .clone()
-                    .at_derivation_index(index)
-                    .expect("valid child index");
-                if child_public_key.to_public_key() == pk {
-                    let child_secret_key = desc_sk.clone().at_derivation_index(index).ok()?;
-                    let keypair = elements::schnorr::KeyPair::from_secret_key(
-                        secp256k1_zkp::SECP256K1,
-                        &child_secret_key.to_private_key().inner,
-                    );
-                    return Some(keypair);
-                }
-            }
-        }
-
-        None
-    }
-
-    fn get_signature(
-        &self,
-        sighash: &[u8],
-        keypair: &elements::schnorr::KeyPair,
-    ) -> elements::SchnorrSig {
+    fn get_signature(sighash: &[u8], keypair: &elements::schnorr::KeyPair) -> elements::SchnorrSig {
         let msg = secp256k1_zkp::Message::from_slice(sighash).expect("32-byte sighash");
         let sig = keypair.sign_schnorr(msg);
 
@@ -311,8 +269,10 @@ where
     O: Borrow<elements::TxOut>,
 {
     fn lookup_tap_key_spend_sig(&self) -> Option<elements::SchnorrSig> {
-        let internal_key = self.control_block.internal_key;
-        let keypair = self.get_keypair(internal_key.to_public_key())?;
+        let internal_key = descriptor::get_control_block(self.descriptor)?
+            .internal_key
+            .to_public_key();
+        let keypair = self.state.get_keypair(&internal_key)?;
         let sighash = self
             .cache
             .borrow_mut()
@@ -320,11 +280,11 @@ where
                 self.input_index,
                 &self.prevouts,
                 elements::sighash::SchnorrSigHashType::All,
-                self.genesis_hash,
+                self.state.network().genesis_hash(),
             )
             .ok()?;
 
-        let signature = self.get_signature(sighash.as_ref(), &keypair);
+        let signature = Self::get_signature(sighash.as_ref(), &keypair);
         Some(signature)
     }
 
@@ -333,20 +293,20 @@ where
         pk: &Pk,
         _leaf_hash: &elements::taproot::TapLeafHash,
     ) -> Option<elements::SchnorrSig> {
-        let keypair = self.get_keypair(pk.to_public_key())?;
+        let keypair = self.state.get_keypair(&pk.to_public_key())?;
         let sighash = self
             .cache
             .borrow_mut()
             .simplicity_spend_signature_hash(
                 self.input_index,
                 &self.prevouts,
-                self.script_cmr,
-                self.control_block.clone(),
-                self.genesis_hash,
+                descriptor::get_cmr(self.descriptor)?,
+                descriptor::get_control_block(self.descriptor)?,
+                self.state.network().genesis_hash(),
             )
             .ok()?;
 
-        let signature = self.get_signature(sighash.as_ref(), &keypair);
+        let signature = Self::get_signature(sighash.as_ref(), &keypair);
         Some(signature)
     }
 

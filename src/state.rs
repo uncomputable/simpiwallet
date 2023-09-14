@@ -6,6 +6,7 @@ use std::path::Path;
 use bitcoin::key::PublicKey;
 use elements::{bitcoin, secp256k1_zkp};
 use elements_miniscript as miniscript;
+use elements_miniscript::ToPublicKey;
 use miniscript::{elements, Descriptor, DescriptorPublicKey};
 use serde::{Deserialize, Serialize};
 
@@ -46,10 +47,6 @@ impl State {
         }
     }
 
-    pub fn keymap(&self) -> &HashMap<DescriptorPublicKey, DescriptorSecretKey> {
-        &self.keymap
-    }
-
     pub fn descriptor(&self) -> &Descriptor<DescriptorPublicKey> {
         &self.descriptor
     }
@@ -68,6 +65,29 @@ impl State {
 
     pub fn max_child_index(&self) -> u32 {
         self.next_index
+    }
+
+    pub fn get_keypair(&self, key: &PublicKey) -> Option<elements::schnorr::KeyPair> {
+        for (desc_pk, desc_sk) in &self.keymap {
+            // TODO: Update once there is support for multiple descriptors
+            for index in 0..self.next_index {
+                let child_public_key = desc_pk
+                    .clone()
+                    .at_derivation_index(index)
+                    .expect("good xpub")
+                    .to_public_key();
+                if &child_public_key == key {
+                    let child_secret_key = desc_sk.clone().at_derivation_index(index).ok()?;
+                    let keypair = elements::schnorr::KeyPair::from_secret_key(
+                        secp256k1_zkp::SECP256K1,
+                        &child_secret_key.to_private_key().inner,
+                    );
+                    return Some(keypair);
+                }
+            }
+        }
+
+        None
     }
 
     pub fn next_address(&mut self) -> Result<elements::Address, Error> {
