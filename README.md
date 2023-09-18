@@ -4,23 +4,35 @@ First wallet that uses Simplicity descriptors.
 
 The latest research on Bitcoin smart contracts at your fingertips.
 
-## Building
+## Build the wallet
 
 ```
 $ cargo build
 ```
 
-## Installing Elements
+## Install Elements
 
 We need [Elements Core with added Simplicity support](https://github.com/ElementsProject/elements/tree/simplicity).
 
+There are multiple ways to install it:
+
+### Download the binary
+
+Download the [prebuilt binary by psgreco](https://github.com/psgreco/elements/releases/tag/simplicityregtest1-0.0) which adheres to the same security standards as the Bitcoin Core binaries.
+
+### Compile the binary
+
 Compile Elements manually using the [official instructions](https://github.com/ElementsProject/elements/blob/simplicity/doc/build-unix.md).
 
-Or use the [provided nix shell](https://github.com/uncomputable/simpiwallet/blob/master/shell.nix). This will give you `elementsd` and `elements-cli`.
+### Use the nix shell
+
+Use the [provided nix shell](https://github.com/uncomputable/simpiwallet/blob/master/shell.nix). This will give you `elementsd` and `elements-cli`.
 
 ```
 $ nix-shell
 ```
+
+### Install via nixpkgs
 
 A slightly outdated version of Elements + Simplicity can be installed via nixpkgs.
 
@@ -28,14 +40,14 @@ A slightly outdated version of Elements + Simplicity can be installed via nixpkg
 $ nix-shell -p elementsd-simplicity
 ```
 
-## Running
+## Run the wallet
 
 ```
 $ simpiwallet <SUBCOMMAND>
 $ simpiwallet help
 ```
 
-## Initializing the wallet
+## Initialize the wallet
 
 Generate the initial xpub and save it to disk.
 
@@ -47,7 +59,7 @@ Other operations will read and write from the same file.
 
 **Secret keys are stored in plain on disk!** Don't forget, this is a research prototype. Use it on regtest or testnet, but never on mainnet!
 
-## Running Elements
+## Run Elements
 
 The wallet needs to communicate with Elements.
 
@@ -64,7 +76,7 @@ Run elementsd.
 $ elementsd
 ```
 
-## Funding the wallet
+## Fund the wallet
 
 Initially the wallet will not have any funds. You have to generate an address and send coins from another wallet.
 
@@ -125,7 +137,7 @@ $ simpiwallet getfunds
 : <HIGHER_BALANCE>
 ```
 
-## Sending to address
+## Send to an address
 
 Send coins to a given Elements address.
 
