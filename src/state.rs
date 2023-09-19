@@ -43,7 +43,7 @@ impl State {
             assembly: AssemblySet::default(),
             fee: bitcoin::Amount::from_sat(1000),
             rpc: Connection::default(),
-            network: Network::Testnet,
+            network: Network::Regtest,
         }
     }
 
